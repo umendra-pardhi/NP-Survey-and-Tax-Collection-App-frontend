@@ -1,0 +1,25 @@
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Badge, Row, Screen, Section, Title } from '@/components/UI';
+import { getFlowStats } from '@/services/propertyService';
+
+export const NumberingSummaryScreen = () => {
+  const [stats, setStats] = useState({ total: 0, numbered: 0, surveyed: 0, taxed: 0 });
+  useFocusEffect(
+    useCallback(() => {
+      getFlowStats().then(setStats);
+    }, []),
+  );
+  return (
+    <Screen>
+      <Title>Numbering Summary</Title>
+      <Section>
+        <Row>
+          <Badge text={`Total: ${stats.total}`} />
+          <Badge text={`Completed: ${stats.numbered}`} />
+          <Badge text={`Remaining: ${Math.max(stats.total - stats.numbered, 0)}`} />
+        </Row>
+      </Section>
+    </Screen>
+  );
+};
