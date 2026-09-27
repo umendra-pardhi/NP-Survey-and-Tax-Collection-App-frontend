@@ -4,7 +4,6 @@ import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const nowIso = () => new Date().toISOString();
-const ACCOUNT_PHOTO_DIR = `${FileSystem.documentDirectory ?? ""}accounts_photos/`;
 const PHOTO_EXPORT_DIRECTORY_KEY = "NPA_NUMBERING_PHOTO_EXPORT_DIRECTORY";
 const PHOTO_EXPORT_FOLDER_NAME = "NPA_Property_Photos";
 
@@ -168,6 +167,23 @@ export const saveNumbering = async (payload: {
   }>;
 }) => {
   const db = await getDB();
+  let photoPaths: string[] = [];
+  if (payload.photos.length > 0) {
+    const exportDirectory = await getNumberingPhotoExportDirectory();
+    if (!exportDirectory) {
+      throw new Error("Choose a photo folder before saving photos.");
+    }
+    photoPaths = await Promise.all(
+      payload.photos.map((photo) =>
+        exportPhotoToSelectedDirectory(
+          payload.propertyId,
+          photo,
+          exportDirectory,
+        ),
+      ),
+    );
+  }
+
   await db.runAsync(
     `UPDATE Accounts SET
       WardNo = ?,
@@ -196,22 +212,8 @@ export const saveNumbering = async (payload: {
     ],
   );
 
-  let exportedPhotos = 0;
-  let failedExports = 0;
-  for (const photo of payload.photos) {
-    const imagePath = await savePhotoToDeviceStorage(payload.propertyId, photo);
-    let exportedPhoto = false;
-    let exportFailed = false;
-    try {
-      const exportDirectory = await getNumberingPhotoExportDirectory();
-      exportFailed = !!exportDirectory;
-      exportedPhoto = await exportPhotoToSelectedDirectory(
-        payload.propertyId,
-        photo,
-      );
-    } catch {
-      exportFailed = true;
-    }
+  for (let index = 0; index < payload.photos.length; index += 1) {
+    const photo = payload.photos[index];
     await db.runAsync(
       `INSERT INTO AccountsPhotos
        (ACID, FileName, MimeType, ImagePath, created_at, updated_at, sync_version)
@@ -220,45 +222,21 @@ export const saveNumbering = async (payload: {
         payload.propertyId,
         photo.fileName,
         photo.mimeType,
-        imagePath,
+        photoPaths[index],
         nowIso(),
         nowIso(),
       ],
     );
-    if (exportedPhoto) exportedPhotos += 1;
-    else if (exportFailed) failedExports += 1;
   }
 
-  return { exportedPhotos, failedExports };
-};
-
-const savePhotoToDeviceStorage = async (
-  accountId: number,
-  photo: { uri: string; fileName: string },
-) => {
-  const directoryInfo = await FileSystem.getInfoAsync(ACCOUNT_PHOTO_DIR);
-  if (!directoryInfo.exists) {
-    await FileSystem.makeDirectoryAsync(ACCOUNT_PHOTO_DIR, {
-      intermediates: true,
-    });
-  }
-
-  const safeFileName = photo.fileName.replace(/[^\w.-]/g, "_");
-  const destination = `${ACCOUNT_PHOTO_DIR}${accountId}_${Date.now()}_${safeFileName}`;
-  await FileSystem.copyAsync({
-    from: photo.uri,
-    to: destination,
-  });
-  return destination;
+  return { exportedPhotos: photoPaths.length, failedExports: 0 };
 };
 
 const exportPhotoToSelectedDirectory = async (
   accountId: number,
   photo: { uri: string; fileName: string; mimeType: string },
-) => {
-  const directoryUri = await getNumberingPhotoExportDirectory();
-  if (!directoryUri) return false;
-
+  directoryUri: string,
+): Promise<string> => {
   const safeFileName = photo.fileName.replace(/[^\w.-]/g, "_");
   const extensionIndex = safeFileName.lastIndexOf(".");
   const extension =
@@ -281,7 +259,7 @@ const exportPhotoToSelectedDirectory = async (
       encoding: FileSystem.EncodingType.Base64,
     },
   );
-  return true;
+  return targetUri;
 };
 
 export const getWardNumbers = async (): Promise<string[]> => {

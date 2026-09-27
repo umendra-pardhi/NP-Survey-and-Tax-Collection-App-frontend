@@ -249,8 +249,8 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
                   />
                   <Text style={{ marginTop: 8 }}>
                     {photoExportConfigured
-                      ? 'An accessible copy will be saved in NPA_Property_Photos.'
-                      : 'Choose a folder to save an accessible copy of each photo.'}
+                      ? 'Photos will be stored in NPA_Property_Photos.'
+                      : 'Choose a folder before saving photos.'}
                   </Text>
                   <IconButton label={`Take Photo (${existingPhotoCount + photos.length}/3)`} onPress={takePhoto} />
                   {existingPhotoCount > 0 && (

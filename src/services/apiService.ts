@@ -1,4 +1,32 @@
-import { apiClient } from "@/services/apiClient";
+import { API_BASE_URL, apiClient } from "@/services/apiClient";
+
+export interface PhotoBatchResponse {
+  batch_id: string;
+  status: string;
+  expected_files: number;
+  created_at: string;
+}
+
+export interface PhotoUploadResponse {
+  file_id: string;
+  batch_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  path: string;
+}
+
+export interface PhotoBatchStatusResponse {
+  batch_id: string;
+  status: string;
+  expected_files: number | null;
+  total_files: number;
+  uploaded_files: number;
+  uploading_files: number;
+  progress_percent: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
 
 export interface InitialConnectPayload {
   server: string;
@@ -158,6 +186,75 @@ export const apiService = {
         },
         transformRequest: [(value) => value],
       },
+    );
+    return data;
+  },
+
+  createPhotoBatch: async (expectedFiles: number) => {
+    const { data } = await apiClient.post<PhotoBatchResponse>(
+      "/api/v1/photos/batches",
+      { expected_files: expectedFiles },
+    );
+    return data;
+  },
+
+  uploadPhoto: async (
+    batchId: string,
+    uri: string,
+    filename: string,
+    mimeType: string,
+  ) => {
+    const formData = new FormData();
+    formData.append("file", {
+      uri,
+      name: filename,
+      type: mimeType,
+    } as unknown as Blob);
+
+    return new Promise<PhotoUploadResponse>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open(
+        "POST",
+        `${API_BASE_URL}/api/v1/photos/batches/${encodeURIComponent(batchId)}/files`,
+      );
+      request.setRequestHeader("Accept", "application/json");
+      request.timeout = 120_000;
+      request.onload = () => {
+        const responseBody = request.responseText;
+        if (request.status < 200 || request.status >= 300) {
+          let message = `Photo upload failed (${request.status})`;
+          try {
+            const body = JSON.parse(responseBody) as { detail?: string };
+            message = body.detail || message;
+          } catch {
+            if (responseBody) message = responseBody;
+          }
+          reject(new Error(message));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(responseBody) as PhotoUploadResponse);
+        } catch {
+          reject(new Error("Photo upload returned an invalid response."));
+        }
+      };
+      request.onerror = () => reject(new Error("Photo upload network error."));
+      request.ontimeout = () => reject(new Error("Photo upload timed out."));
+      request.send(formData);
+    });
+  },
+
+  getPhotoBatchStatus: async (batchId: string) => {
+    const { data } = await apiClient.get<PhotoBatchStatusResponse>(
+      `/api/v1/photos/batches/${encodeURIComponent(batchId)}`,
+    );
+    return data;
+  },
+
+  completePhotoBatch: async (batchId: string) => {
+    const { data } = await apiClient.post<{ batch_id: string; status: string }>(
+      `/api/v1/photos/batches/${encodeURIComponent(batchId)}/complete`,
     );
     return data;
   },

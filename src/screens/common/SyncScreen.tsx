@@ -44,7 +44,10 @@ export const SyncScreen = () => {
       setUploadStatus('Starting upload...');
       const counts = await uploadToServer(config, { onStatus: setUploadStatus });
       await refreshLogs();
-      Alert.alert('Upload Complete', `${counts.records} records streamed`);
+      Alert.alert(
+        'Upload Complete',
+        `${counts.records} records streamed and ${counts.photos} photos uploaded`,
+      );
     } catch (error) {
       Alert.alert('Upload Failed', error instanceof Error ? error.message : 'Failed');
     } finally {

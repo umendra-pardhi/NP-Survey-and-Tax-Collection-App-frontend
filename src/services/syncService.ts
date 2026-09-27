@@ -3,10 +3,20 @@ import { ServerConfig } from "@/types";
 import { apiService } from "@/services/apiService";
 import { toDbCredentials } from "@/context/AuthContext";
 import type { SQLiteBindValue } from "expo-sqlite";
+import * as FileSystem from "expo-file-system/legacy";
 
 const nowIso = () => new Date().toISOString();
 const REMOTE_DOWNLOAD_LIMIT = 500;
 const UPLOAD_BATCH_SIZE = 100;
+const PHOTO_BATCH_SIZE = 5000;
+const MAX_PHOTO_SIZE_BYTES = 25 * 1024 * 1024;
+const ALLOWED_PHOTO_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+]);
 
 const ACCOUNT_COLUMNS = [
   "ACID",
@@ -163,6 +173,117 @@ const getDirtyRows = async (table: (typeof UPLOAD_TABLES)[number]) => {
   );
 };
 
+interface PendingPhoto {
+  ImageId: number;
+  FileName: string | null;
+  MimeType: string | null;
+  ImagePath: string;
+  sync_version: number;
+}
+
+const getPendingPhotos = async (): Promise<PendingPhoto[]> => {
+  const db = await getDB();
+  return db.getAllAsync<PendingPhoto>(
+    `SELECT source.ImageId AS ImageId,
+       source.FileName AS FileName,
+       source.MimeType AS MimeType,
+       source.ImagePath AS ImagePath,
+       COALESCE(source.sync_version, 1) AS sync_version
+     FROM AccountsPhotos AS source
+     LEFT JOIN sync_state AS state
+       ON state.table_name = 'AccountsPhotosFiles'
+       AND state.record_key = CAST(source.ImageId AS TEXT)
+     WHERE COALESCE(source.sync_version, 1) > COALESCE(state.synced_version, 0)
+     ORDER BY source.ImageId`,
+  );
+};
+
+const preparePhoto = async (photo: PendingPhoto) => {
+  const filename =
+    photo.FileName?.trim() ||
+    decodeURIComponent(
+      photo.ImagePath.split(/[?#]/)[0].split(/[\\/]/).pop() ?? "",
+    );
+  const extension = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+  if (!ALLOWED_PHOTO_EXTENSIONS.has(extension)) {
+    throw new Error(
+      `Unsupported photo extension for ${filename || photo.ImageId}.`,
+    );
+  }
+
+  const info = await FileSystem.getInfoAsync(photo.ImagePath);
+  if (!info.exists || !("size" in info)) {
+    throw new Error(`Photo file is missing: ${filename}.`);
+  }
+  if (info.size <= 0) throw new Error(`Photo file is empty: ${filename}.`);
+  if (info.size > MAX_PHOTO_SIZE_BYTES) {
+    throw new Error(`${filename} exceeds the 25 MiB photo limit.`);
+  }
+
+  const inferredMimeType: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+  };
+  const storedMimeType = photo.MimeType?.trim() ?? "";
+  const mimeType =
+    /^image\//i.test(storedMimeType) ||
+    storedMimeType.toLowerCase() === "application/octet-stream"
+      ? storedMimeType
+      : inferredMimeType[extension];
+
+  return { ...photo, filename, mimeType };
+};
+
+const uploadPendingPhotos = async (onStatus?: (message: string) => void) => {
+  const photos = await Promise.all(
+    (await getPendingPhotos()).map(preparePhoto),
+  );
+  let uploadedPhotos = 0;
+
+  for (let offset = 0; offset < photos.length; offset += PHOTO_BATCH_SIZE) {
+    const batchPhotos = photos.slice(offset, offset + PHOTO_BATCH_SIZE);
+    const batch = await apiService.createPhotoBatch(batchPhotos.length);
+
+    for (let index = 0; index < batchPhotos.length; index += 1) {
+      const photo = batchPhotos[index];
+      onStatus?.(
+        `Uploading photo ${offset + index + 1} of ${photos.length}...`,
+      );
+      await apiService.uploadPhoto(
+        batch.batch_id,
+        photo.ImagePath,
+        photo.filename,
+        photo.mimeType,
+      );
+    }
+
+    const batchStatus = await apiService.getPhotoBatchStatus(batch.batch_id);
+    if (
+      batchStatus.uploaded_files !== batchPhotos.length ||
+      batchStatus.uploading_files !== 0
+    ) {
+      throw new Error(
+        `Photo batch ${batch.batch_id} is not ready to complete (${batchStatus.uploaded_files}/${batchPhotos.length} uploaded).`,
+      );
+    }
+
+    await apiService.completePhotoBatch(batch.batch_id);
+    for (const photo of batchPhotos) {
+      await markSynced(
+        "AccountsPhotosFiles",
+        String(photo.ImageId),
+        photo.sync_version,
+      );
+      uploadedPhotos += 1;
+    }
+  }
+
+  return uploadedPhotos;
+};
+
 const toUploadRow = (row: Record<string, unknown>) => {
   const output = { ...row };
   delete output.__sync_version;
@@ -305,8 +426,13 @@ export const uploadToServer = async (
       }
     }
 
-    await addLog("SUCCESS", `Upload completed. ${uploaded} records streamed.`);
-    return { records: uploaded };
+    options.onStatus?.("Database sync complete. Preparing photo uploads...");
+    const photos = await uploadPendingPhotos(options.onStatus);
+    await addLog(
+      "SUCCESS",
+      `Upload completed. ${uploaded} records streamed and ${photos} photos uploaded.`,
+    );
+    return { records: uploaded, photos };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown sync upload error";
