@@ -10,26 +10,26 @@ export const searchProperties = async (filters: {
   const db = await getDB();
   const rows = await db.getAllAsync<PropertyRow>(
     `SELECT 
-      acid as id,
-      COALESCE(CAST(wardno as TEXT), '') as ward_no,
-      COALESCE(CAST(propertyno as TEXT), '') as property_no,
-      COALESCE(CAST(partno as TEXT), '') as part_no,
-      COALESCE(owner_name, '') as owner_name,
-      COALESCE(address, '') as address,
-      COALESCE(CAST(puid as TEXT), '') as property_type,
+      ACID as id,
+      COALESCE(CAST(WardNo as TEXT), '') as ward_no,
+      COALESCE(CAST(PropertyNo as TEXT), '') as property_no,
+      COALESCE(CAST(PartNo as TEXT), '') as part_no,
+      COALESCE(Owner_Name, '') as owner_name,
+      COALESCE(Address, '') as address,
+      COALESCE(CAST(PUID as TEXT), '') as property_type,
       '' as floor_info,
-      COALESCE(haswaterconnection, 0) as water_connection,
+      COALESCE(HasWaterConnection, 0) as water_connection,
       '' as toilet_info,
       CASE WHEN COALESCE(numberingdone,0)=1 THEN 'DONE' ELSE 'PENDING' END as numbering_status,
       CASE WHEN COALESCE(surveydone,0)=1 THEN 'DONE' ELSE 'PENDING' END as survey_status,
       'PENDING' as tax_status,
       '' as updated_at
-     FROM accounts
-     WHERE (? = '' OR CAST(wardno as TEXT) LIKE ?)
-       AND (? = '' OR CAST(propertyno as TEXT) LIKE ?)
-       AND (? = '' OR CAST(partno as TEXT) LIKE ?)
-       AND (? = '' OR owner_name LIKE ?)
-     ORDER BY wardno, propertyno`,
+     FROM Accounts
+     WHERE (? = '' OR CAST(WardNo as TEXT) LIKE ?)
+       AND (? = '' OR CAST(PropertyNo as TEXT) LIKE ?)
+       AND (? = '' OR CAST(PartNo as TEXT) LIKE ?)
+       AND (? = '' OR Owner_Name LIKE ?)
+     ORDER BY WardNo, PropertyNo`,
     [
       filters.wardNo ?? "",
       `%${filters.wardNo ?? ""}%`,
@@ -48,21 +48,21 @@ export const getPropertyById = async (id: number) => {
   const db = await getDB();
   return db.getFirstAsync<PropertyRow>(
     `SELECT 
-      acid as id,
-      COALESCE(CAST(wardno as TEXT), '') as ward_no,
-      COALESCE(CAST(propertyno as TEXT), '') as property_no,
-      COALESCE(CAST(partno as TEXT), '') as part_no,
-      COALESCE(owner_name, '') as owner_name,
-      COALESCE(address, '') as address,
-      COALESCE(CAST(puid as TEXT), '') as property_type,
+      ACID as id,
+      COALESCE(CAST(WardNo as TEXT), '') as ward_no,
+      COALESCE(CAST(PropertyNo as TEXT), '') as property_no,
+      COALESCE(CAST(PartNo as TEXT), '') as part_no,
+      COALESCE(Owner_Name, '') as owner_name,
+      COALESCE(Address, '') as address,
+      COALESCE(CAST(PUID as TEXT), '') as property_type,
       '' as floor_info,
-      COALESCE(haswaterconnection, 0) as water_connection,
+      COALESCE(HasWaterConnection, 0) as water_connection,
       '' as toilet_info,
       CASE WHEN COALESCE(numberingdone,0)=1 THEN 'DONE' ELSE 'PENDING' END as numbering_status,
       CASE WHEN COALESCE(surveydone,0)=1 THEN 'DONE' ELSE 'PENDING' END as survey_status,
       'PENDING' as tax_status,
       '' as updated_at
-    FROM accounts WHERE acid = ?`,
+    FROM Accounts WHERE ACID = ?`,
     [id],
   );
 };
@@ -70,16 +70,16 @@ export const getPropertyById = async (id: number) => {
 export const getFlowStats = async () => {
   const db = await getDB();
   const total = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM accounts",
+    "SELECT COUNT(*) as total FROM Accounts",
   );
   const numbered = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM accounts WHERE COALESCE(numberingdone,0)=1",
+    "SELECT COUNT(*) as total FROM Accounts WHERE COALESCE(numberingdone,0)=1",
   );
   const surveyed = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM accounts WHERE COALESCE(surveydone,0)=1",
+    "SELECT COUNT(*) as total FROM Accounts WHERE COALESCE(surveydone,0)=1",
   );
   const taxed = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM taxpayments",
+    "SELECT COUNT(*) as total FROM TaxPayments",
   );
   return {
     total: total?.total ?? 0,

@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Text, Switch, View, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, StyleSheet, Image, Modal, TouchableOpacity, Pressable } from 'react-native';
+import { Text, Switch, View, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, StyleSheet, Image, Modal, TouchableOpacity, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Input, Label, Screen, Section, Title } from '@/components/UI';
+import { Toast } from '@/components/Toast';
 import { RootStackParamList } from '@/navigation/types';
-import { getNumberingAccountById, saveNumbering, getAccountsPhotos } from '@/services/numberingService';
+import {
+  chooseNumberingPhotoExportDirectory,
+  getNumberingAccountById,
+  getAccountsPhotos,
+  getNumberingPhotoExportDirectory,
+  saveNumbering,
+} from '@/services/numberingService';
 import { NumberingAccount } from '@/types';
 import * as ImagePicker from 'expo-image-picker';
 import IconButton from '@/components/Button';
@@ -40,9 +47,18 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
   const [existingPhotoCount, setExistingPhotoCount] = useState(0);
   const [hasGharkul, setHasGharkul] = useState(false);
   const [accountPhotos, setAccountPhotos] = useState<AccountPhoto[]>([]);
-
+  const [photoExportConfigured, setPhotoExportConfigured] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
 
   const [visible, setVisible] = useState(false);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
 
   const toNullableInt = (value: string): number | null => {
     const trimmed = value.trim();
@@ -52,6 +68,9 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
   };
 
   useEffect(() => {
+    getNumberingPhotoExportDirectory().then((directory) => {
+      setPhotoExportConfigured(!!directory);
+    });
     getNumberingAccountById(route.params.propertyId).then((p) => {
       setProperty(p ?? null);
       if (!p) return;
@@ -77,7 +96,7 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
   const onSave = async () => {
     try {
       if (!property) return;
-      await saveNumbering({
+      const result = await saveNumbering({
         propertyId: property.id,
         wardNo: toNullableInt(wardNo),
         propertyNo: toNullableInt(propertyNo),
@@ -89,10 +108,29 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
         remarks,
         photos: photos.map(({ uri, fileName, mimeType }) => ({ uri, fileName, mimeType })),
       });
-      Alert.alert('Saved', 'Numbering saved locally.');
-      navigation.goBack();
+      const exportMessage = result.failedExports > 0
+        ? ` ${result.failedExports} photo(s) could not be copied to the selected folder.`
+        : result.exportedPhotos > 0
+          ? ` ${result.exportedPhotos} photo(s) copied to the selected folder.`
+          : '';
+      showToast(`Numbering saved locally.${exportMessage}`, result.failedExports > 0 ? 'info' : 'success');
+      setTimeout(() => navigation.goBack(), 300);
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save');
+      showToast(error instanceof Error ? error.message : 'Failed to save', 'error');
+    }
+  };
+
+  const choosePhotoFolder = async () => {
+    try {
+      const directory = await chooseNumberingPhotoExportDirectory();
+      if (!directory) {
+        showToast('No photo folder selected.', 'info');
+        return;
+      }
+      setPhotoExportConfigured(true);
+      showToast('Photos will be copied to NPA_Property_Photos in the selected folder.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not access that folder.', 'error');
     }
   };
 
@@ -119,7 +157,7 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
 
   const takePhoto = async () => {
     if (existingPhotoCount + photos.length >= 3) {
-      Alert.alert('Photo Limit', 'You can capture maximum 3 photos for one account.');
+      showToast('You can capture maximum 3 photos for one account.', 'info');
       return;
     }
 
@@ -127,7 +165,7 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
     if (permissionResult.granted === false) {
-      alert("You've refused to allow this app to access your camera!");
+      showToast('Camera access was denied.', 'error');
       setVisible(false);
       return;
     }
@@ -136,7 +174,7 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true, // Allows cropping/rotating
       aspect: [4, 3],
-      quality: 0.5,
+      quality: 0.3,
     });
 
     if (!result.canceled) {
@@ -159,75 +197,94 @@ export const NumberingFormScreen = ({ route, navigation }: Props) => {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, position: 'relative' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <Screen >
-          <Title>Numbering Form</Title>
-          <Section>
-            <Text>मालकाचे नाव: {property?.owner_name}</Text>
-            <Text>भोगवटदाराचे नाव: {property?.holder_name}</Text>
-            <Text>मोबाइल नंबर: {property?.mobile_no}</Text>
-            <Text>जुना वॉर्ड क्र. : {property?.o_ward_no != null ? String(property.o_ward_no) : ''}</Text>
-            <Text>जुना मिळकत क्र. : {property?.o_property_no ?? ''}</Text>
-            <Text>जुना झोन क्र. : {property?.o_zid != null ? String(property.o_zid) : ''}</Text>
-            <Text>जुना ऑनलाइन क्र. : {property?.o_online_no ?? ''}</Text>
-            <Text>जुना चालू कर : {property?.o_total_tax != null ? String(property.o_total_tax) : ''}</Text>
-          </Section>
+      <View style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1 }}>
+            <Screen>
+              <Title>Numbering Form</Title>
+              <Section>
+                <Text>मालकाचे नाव: {property?.owner_name}</Text>
+                <Text>भोगवटदाराचे नाव: {property?.holder_name}</Text>
+                <Text>मोबाइल नंबर: {property?.mobile_no}</Text>
+                <Text>जुना वॉर्ड क्र. : {property?.o_ward_no != null ? String(property.o_ward_no) : ''}</Text>
+                <Text>जुना मिळकत क्र. : {property?.o_property_no ?? ''}</Text>
+                <Text>जुना झोन क्र. : {property?.o_zid != null ? String(property.o_zid) : ''}</Text>
+                <Text>जुना ऑनलाइन क्र. : {property?.o_online_no ?? ''}</Text>
+                <Text>जुना चालू कर : {property?.o_total_tax != null ? String(property.o_total_tax) : ''}</Text>
+              </Section>
 
-          <Text style={{ marginTop: 0, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>--- नवीन माहिती भरा ---</Text>
+              <Text style={{ marginTop: 0, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>--- नवीन माहिती भरा ---</Text>
 
-          <Section>
-            <Label>नवा वॉर्ड क्र. (WardNo)</Label>
-            <Input value={wardNo} onChangeText={setWardNo} />
-            <Label>नवा मिळकत क्र. (PropertyNo)</Label>
-            <Input value={propertyNo} onChangeText={setPropertyNo} />
-            <Label>नवा भाग क्र. (PartNo)</Label>
-            <Input value={partNo} onChangeText={setPartNo} />
+              <Section>
+                <Label>नवा वॉर्ड क्र. (WardNo)</Label>
+                <Input value={wardNo} onChangeText={setWardNo} />
+                <Label>नवा मिळकत क्र. (PropertyNo)</Label>
+                <Input value={propertyNo} onChangeText={setPropertyNo} />
+                <Label>नवा भाग क्र. (PartNo)</Label>
+                <Input value={partNo} onChangeText={setPartNo} />
 
-            <Label>Address</Label>
-            <Input value={address} onChangeText={setAddress} />
-            <Label>Building Name</Label>
-            <Input value={buildingName} onChangeText={setBuildingName} />
-            <Label>Building No</Label>
-            <Input value={buildingNo} onChangeText={setBuildingNo} />
+                <Label>Address</Label>
+                <Input value={address} onChangeText={setAddress} />
+                <Label>Building Name</Label>
+                <Input value={buildingName} onChangeText={setBuildingName} />
+                <Label>Building No</Label>
+                <Input value={buildingNo} onChangeText={setBuildingNo} />
 
-            <Label>Remarks (NumberingRemarks)</Label>
-            <Input value={remarks} multiline={true} numberOfLines={4} onChangeText={setRemarks} />
-            <Label>घरकुल आहे का?</Label>
-            <View style={{ flexDirection: 'row', alignItems: 'center', }}>
-              <Text> {hasGharkul ? 'होय ' : 'नाही '} </Text>
-              <Switch value={!!hasGharkul} onValueChange={setHasGharkul} style={{ alignSelf: 'flex-start', transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }], }} />
-            </View>
-            <Label>Photo</Label>
-
-            <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 12 }}>
-              <IconButton label={`Take Photo (${existingPhotoCount + photos.length}/3)`} onPress={takePhoto} />
-              {existingPhotoCount > 0 && (
-                <Text style={{ marginTop: 8 }}>Saved photos: {existingPhotoCount}</Text>
-              )}
-              {accountPhotos.map((photo) => (
-                <View key={photo.ImageId} style={{ alignItems: 'center' }}>
-                  <Image source={{ uri: photo.ImagePath }} style={styles.image} />
-                  <Text style={{ marginTop: 6 }}>{photo.FileName}</Text>
+                <Label>Remarks (NumberingRemarks)</Label>
+                <Input value={remarks} multiline={true} numberOfLines={4} onChangeText={setRemarks} />
+                <Label>घरकुल आहे का?</Label>
+                <View style={{ flexDirection: 'row', alignItems: 'center', }}>
+                  <Text> {hasGharkul ? 'होय ' : 'नाही '} </Text>
+                  <Switch value={!!hasGharkul} onValueChange={setHasGharkul} style={{ alignSelf: 'flex-start', transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }], }} />
                 </View>
-              ))}
-              {photos.map((photo, index) => (
-                <View key={`${photo.uri}-${index}`} style={{ alignItems: 'center' }}>
-                  <Image source={{ uri: photo.uri }} style={styles.image} />
-                  <Pressable onPress={() => removePhoto(index)} style={{ marginTop: 8 }}>
-                    <Text style={{ color: '#BC3908', fontWeight: '700' }}>Remove Photo</Text>
-                  </Pressable>
+                <Label>Photo</Label>
+
+                <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 12 }}>
+                  <IconButton
+                    label={photoExportConfigured ? 'Change Photo Folder' : 'Choose Download Folder'}
+                    onPress={choosePhotoFolder}
+                  />
+                  <Text style={{ marginTop: 8 }}>
+                    {photoExportConfigured
+                      ? 'An accessible copy will be saved in NPA_Property_Photos.'
+                      : 'Choose a folder to save an accessible copy of each photo.'}
+                  </Text>
+                  <IconButton label={`Take Photo (${existingPhotoCount + photos.length}/3)`} onPress={takePhoto} />
+                  {existingPhotoCount > 0 && (
+                    <Text style={{ marginTop: 8 }}>Saved photos: {existingPhotoCount}</Text>
+                  )}
+                  {accountPhotos.map((photo) => (
+                    <View key={photo.ImageId} style={{ alignItems: 'center' }}>
+                      <Image source={{ uri: photo.ImagePath }} style={styles.image} />
+                      <Text style={{ marginTop: 6 }}>{photo.FileName}</Text>
+                    </View>
+                  ))}
+                  {photos.map((photo, index) => (
+                    <View key={`${photo.uri}-${index}`} style={{ alignItems: 'center' }}>
+                      <Image source={{ uri: photo.uri }} style={styles.image} />
+                      <Pressable onPress={() => removePhoto(index)} style={{ marginTop: 8 }}>
+                        <Text style={{ color: '#BC3908', fontWeight: '700' }}>Remove Photo</Text>
+                      </Pressable>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
 
-            <Button text="Save Numbering" onPress={onSave} />
-          </Section>
+                <Button text="Save Numbering" onPress={onSave} />
+              </Section>
+            </Screen>
+          </View>
+        </TouchableWithoutFeedback>
 
-        </Screen>
-      </TouchableWithoutFeedback>
+        <Toast
+          visible={toastVisible}
+          message={toastMessage}
+          type={toastType}
+          onHide={() => setToastVisible(false)}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 

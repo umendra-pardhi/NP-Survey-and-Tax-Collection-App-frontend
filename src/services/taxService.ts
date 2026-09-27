@@ -21,7 +21,7 @@ export const saveTaxRecord = async (payload: {
   const db = await getDB();
   const totalTax = calcTotalTax(payload.taxes);
   const existingPaid = await db.getFirstAsync<{ AmountPaid: number }>(
-    "SELECT amountpaid AS AmountPaid FROM taxpayments WHERE acid = ? ORDER BY pyid DESC LIMIT 1",
+    "SELECT AmountPaid AS AmountPaid FROM TaxPayments WHERE ACID = ? ORDER BY PYID DESC LIMIT 1",
     [payload.propertyId],
   );
 
@@ -31,8 +31,8 @@ export const saveTaxRecord = async (payload: {
 
   const receiptNo = `R-${Date.now()}`;
   await db.runAsync(
-    `INSERT INTO taxpayments
-    (recno, acid, ddate, sumprevious, sumcurrent, totalpayableamt, amountpaid, paymentmode, receiver, tranid, updated_at, sync_version)
+    `INSERT INTO TaxPayments
+    (RECNO, ACID, DDate, SumPrevious, SumCurrent, TotalPayableAmt, AmountPaid, PaymentMode, Receiver, TRANID, updated_at, sync_version)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       Number(Date.now().toString().slice(-8)),
@@ -62,12 +62,12 @@ export const getLatestTaxByProperty = async (propertyId: number) => {
     paid_on: string;
   }>(
     `SELECT
-      COALESCE(sumprevious,0) as prev_tax,
-      COALESCE(totalpayableamt,0) as total_tax,
-      COALESCE(amountpaid,0) as paid_amount,
-      CAST(recno as TEXT) as receipt_no,
-      ddate as paid_on
-         FROM taxpayments WHERE acid = ? ORDER BY pyid DESC LIMIT 1`,
+      COALESCE(SumPrevious,0) as prev_tax,
+      COALESCE(TotalPayableAmt,0) as total_tax,
+      COALESCE(AmountPaid,0) as paid_amount,
+      CAST(RECNO as TEXT) as receipt_no,
+      DDate as paid_on
+        FROM TaxPayments WHERE ACID = ? ORDER BY PYID DESC LIMIT 1`,
     [propertyId],
   );
 };

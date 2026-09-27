@@ -9,82 +9,82 @@ const REMOTE_DOWNLOAD_LIMIT = 500;
 const UPLOAD_BATCH_SIZE = 100;
 
 const ACCOUNT_COLUMNS = [
-  "acid",
-  "clientid",
-  "ledgerid",
-  "zid",
-  "wardno",
-  "propertyno",
-  "partno",
-  "citysurveyno",
-  "plotno",
-  "o_onlineno",
-  "o_zid",
-  "o_wardno",
-  "o_propertyno",
-  "o_partno",
-  "o_citysurveyno",
-  "o_plotno",
-  "o_usage",
-  "o_taxablevalue",
-  "o_anualrentalvalue",
-  "aadhar_no",
+  "ACID",
+  "ClientID",
+  "LedgerID",
+  "ZID",
+  "WardNo",
+  "PropertyNo",
+  "PartNo",
+  "CitySurveyNo",
+  "PlotNo",
+  "O_OnlineNo",
+  "O_ZID",
+  "O_WardNo",
+  "O_PropertyNo",
+  "O_PartNo",
+  "O_CitySurveyNo",
+  "O_PlotNo",
+  "Aadhar_No",
   "CTID",
-  "puid",
-  "o_totaltax",
-  "owner_name",
-  "holder_name",
-  "wife_name",
-  "buildingname",
-  "buildingno",
-  "address",
-  "mobileno",
-  "exchange",
-  "hastoilet",
-  "toiletseats1",
-  "toiletseats2",
-  "haswaterconnection",
-  "totalwaterconnections",
-  "hassolarelectricity",
-  "hasrainwaterharvesting",
-  "hastree",
-  "boundry_east",
-  "boundry_west",
-  "boundry_north",
-  "boundry_south",
-  "lengthoneast",
-  "lengthonwest",
-  "lengthonnorth",
-  "lengthonsouth",
-  "avg_length",
-  "avg_breadth",
-  "area",
-  "opa",
-  "gharkul",
-  "hasgharkul",
-  "treenos",
-  "hastenant",
-  "hasbore",
-  "haswell",
-  "tenantname",
-  "photopath",
-  "mappath",
+  "PUID",
+  "O_TotalTax",
+  "Owner_Name",
+  "Holder_Name",
+  "Wife_Name",
+  "BuildingName",
+  "BuildingNo",
+  "Address",
+  "MobileNo",
+  "Exchange",
+  "HasToilet",
+  "ToiletSeats1",
+  "ToiletSeats2",
+  "HasWaterConnection",
+  "TotalWaterConnections",
+  "HasSolarElectricity",
+  "HasRainWaterHarvesting",
+  "HasTree",
+  "Boundry_East",
+  "Boundry_West",
+  "Boundry_North",
+  "Boundry_South",
+  "LengthOnEast",
+  "LengthOnWest",
+  "LengthOnNorth",
+  "LengthOnSouth",
+  "Avg_Length",
+  "Avg_Breadth",
+  "Area",
+  "OPA",
+  "Gharkul",
+  "HasGharkul",
+  "TreeNos",
+  "HasTenant",
+  "HasBore",
+  "HasWell",
+  "TenantName",
+  "PhotoPath",
+  "MapPath",
   "Length",
-  "breadth",
-  "asmcomplete",
+  "Breadth",
+  "AsmComplete",
   "oldbuiltuparea",
-  "remark1",
-  "remark2",
-  "hastower",
-  "manualratablevalue",
-  "manualtax",
-  "remarks3",
+  "Remark1",
+  "Remark2",
+  "HasTower",
+  "ManualRatableValue",
+  "ManualTax",
+  "Remarks3",
+  "PropertyKNRNo",
+  "WaterKNRNo",
   "numberingremarks",
   "numberingdone",
   "surveydone",
   "updated_at",
   "created_at",
   "deleted_at",
+  "sync_version",
 ] as const;
 
 interface DownloadOptions {
@@ -96,15 +96,16 @@ interface UploadOptions {
 }
 
 const UPLOAD_TABLES = [
-  { remote: "accounts", local: "accounts", key: "acid" },
-  { remote: "assessment", local: "assessment", key: "asid" },
-  { remote: "taxpayments", local: "taxpayments", key: "pyid" },
+  { remote: "Accounts", local: "Accounts", key: "ACID" },
+  { remote: "AccountsPhotos", local: "AccountsPhotos", key: "ImageId" },
+  { remote: "Assessment", local: "Assessment", key: "ASID" },
+  { remote: "TaxPayments", local: "TaxPayments", key: "PYID" },
 ] as const;
 
 const addLog = async (status: "SUCCESS" | "ERROR", message: string) => {
   const db = await getDB();
   await db.runAsync(
-    "INSERT INTO usagelog (logtype, description, logdate) VALUES (?, ?, ?)",
+    "INSERT INTO UsageLog (LogType, Description, LogDate) VALUES (?, ?, ?)",
     [status, message, nowIso()],
   );
 };
@@ -117,8 +118,8 @@ export const getSyncLogs = async () => {
     message: string;
     created_at: string;
   }>(
-    `SELECT logid as id, logtype as status, description as message, logdate as created_at
-     FROM usagelog ORDER BY logid DESC LIMIT 20`,
+    `SELECT LogID as id, LogType as status, Description as message, LogDate as created_at
+     FROM UsageLog ORDER BY LogID DESC LIMIT 20`,
   );
 };
 
@@ -167,6 +168,10 @@ const toUploadRow = (row: Record<string, unknown>) => {
   delete output.__sync_version;
   delete output.__record_key;
   delete output.sync_version;
+  const imageDataColumn = Object.keys(output).find(
+    (column) => column.toLowerCase() === "imagedata",
+  );
+  if (imageDataColumn) delete output[imageDataColumn];
   return output;
 };
 
@@ -198,7 +203,7 @@ export const saveAccount = async (row: Record<string, unknown>) => {
   });
 
   await db.runAsync(
-    `INSERT OR REPLACE INTO accounts (${columnSql}) VALUES (${placeholders})`,
+    `INSERT OR REPLACE INTO Accounts (${columnSql}) VALUES (${placeholders})`,
     values,
   );
 };
@@ -215,7 +220,7 @@ export const downloadFromServer = async (
     options.onStatus?.("Preparing account download...");
     const db = await getDB();
     const latestAccount = await db.getFirstAsync<{ last_id: number }>(
-      "SELECT COALESCE(MAX(acid), 0) as last_id FROM accounts",
+      "SELECT COALESCE(MAX(ACID), 0) as last_id FROM Accounts",
     );
     let downloaded = 0;
 
@@ -225,7 +230,7 @@ export const downloadFromServer = async (
     await apiService.syncDownload(
       {
         ...toDbCredentials(config),
-        table_name: "accounts",
+        table_name: "Accounts",
         last_sync_time: "1900-01-01T00:00:00.000Z",
         last_id: latestAccount?.last_id ?? 0,
         limit: REMOTE_DOWNLOAD_LIMIT,
@@ -301,7 +306,7 @@ export const uploadToServer = async (
     }
 
     await addLog("SUCCESS", `Upload completed. ${uploaded} records streamed.`);
-    return { accounts: uploaded };
+    return { records: uploaded };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown sync upload error";

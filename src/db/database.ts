@@ -10,22 +10,22 @@ const createTables = async (db: SQLite.SQLiteDatabase) =>
 
 const migrateAccountsPhotos = async (db: SQLite.SQLiteDatabase) => {
   const columns = await db.getAllAsync<{ name: string }>(
-    "PRAGMA table_info(accountsphotos)",
+    "PRAGMA table_info(AccountsPhotos)",
   );
   const hasImagePath = columns.some(
     (column) => column.name.toLowerCase() === "imagepath",
   );
   if (!hasImagePath) {
-    await db.runAsync("ALTER TABLE accountsphotos ADD COLUMN imagepath TEXT");
+    await db.runAsync("ALTER TABLE AccountsPhotos ADD COLUMN ImagePath TEXT");
   }
 
   const addColumnIfMissing = async (name: string, definition: string) => {
     const currentColumns = await db.getAllAsync<{ name: string }>(
-      "PRAGMA table_info(accountsphotos)",
+      "PRAGMA table_info(AccountsPhotos)",
     );
     if (!currentColumns.some((column) => column.name.toLowerCase() === name)) {
       await db.runAsync(
-        `ALTER TABLE accountsphotos ADD COLUMN ${name} ${definition}`,
+        `ALTER TABLE AccountsPhotos ADD COLUMN ${name} ${definition}`,
       );
     }
   };
@@ -64,15 +64,15 @@ export const authenticateUser = async (
     Password: string;
   }>(
     `SELECT
-      userid AS UserID,
-      userrole AS UserRole,
-      username AS UserName,
-      mobile AS Mobile,
-      email AS EMail,
-      loginid AS LoginID,
+      UserID AS UserID,
+      UserRole AS UserRole,
+      UserName AS UserName,
+      Mobile AS Mobile,
+      EMail AS EMail,
+      LoginID AS LoginID,
       "Password" AS Password
-     FROM users
-     WHERE loginid = ? AND "Password" = ?
+         FROM Users
+         WHERE LoginID = ? AND "Password" = ?
      LIMIT 1`,
     [loginId, passwordHash],
   );
@@ -97,7 +97,7 @@ export const createUser = async (payload: {
 }) => {
   const db = await getDB();
   await db.runAsync(
-    'INSERT INTO users (username, mobile, email, loginid, "Password", userrole, userlocation, clientid) VALUES (?, ?, ?, ?, ?, ?, 0, 0)',
+    'INSERT INTO Users (UserName, Mobile, EMail, LoginID, "Password", UserRole, UserLocation, ClientID) VALUES (?, ?, ?, ?, ?, ?, 0, 0)',
     [
       payload.name,
       payload.mobile,

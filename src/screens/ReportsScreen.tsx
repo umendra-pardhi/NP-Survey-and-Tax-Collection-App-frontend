@@ -16,8 +16,13 @@ export const ReportsScreen = () => {
       <Section>
         <Row>
           <Badge text={`Numbering Report: ${stats.numbered}/${stats.total}`} />
-          <Badge text={`Survey Report: ${stats.surveyed}/${stats.total}`} />
-          <Badge text={`Tax Report: ${stats.taxed}/${stats.total}`} />
+
+          {/* <Badge text={`Survey Report: ${stats.surveyed}/${stats.total}`} />
+          <Badge text={`Tax Report: ${stats.taxed}/${stats.total}`} /> */}
+
+          <Badge text={`Total: ${stats.total}`} />
+          <Badge text={`Completed: ${stats.numbered}`} />
+          <Badge text={`Remaining: ${Math.max(stats.total - stats.numbered, 0)}`} />
         </Row>
       </Section>
     </Screen>

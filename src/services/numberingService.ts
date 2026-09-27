@@ -1,9 +1,40 @@
 import { getDB } from "@/db/database";
 import { NumberingAccount } from "@/types";
 import * as FileSystem from "expo-file-system/legacy";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const nowIso = () => new Date().toISOString();
 const ACCOUNT_PHOTO_DIR = `${FileSystem.documentDirectory ?? ""}accounts_photos/`;
+const PHOTO_EXPORT_DIRECTORY_KEY = "NPA_NUMBERING_PHOTO_EXPORT_DIRECTORY";
+const PHOTO_EXPORT_FOLDER_NAME = "NPA_Property_Photos";
+
+export const getNumberingPhotoExportDirectory = () =>
+  AsyncStorage.getItem(PHOTO_EXPORT_DIRECTORY_KEY);
+
+export const chooseNumberingPhotoExportDirectory = async () => {
+  const { StorageAccessFramework } = FileSystem;
+  const permission =
+    await StorageAccessFramework.requestDirectoryPermissionsAsync(
+      StorageAccessFramework.getUriForDirectoryInRoot("Download"),
+    );
+  if (!permission.granted) return null;
+
+  const existingChildren = await StorageAccessFramework.readDirectoryAsync(
+    permission.directoryUri,
+  );
+  const exportDirectory =
+    existingChildren.find((uri) => {
+      const finalSegment = decodeURIComponent(uri).split(/[/:]/).pop();
+      return finalSegment === PHOTO_EXPORT_FOLDER_NAME;
+    }) ??
+    (await StorageAccessFramework.makeDirectoryAsync(
+      permission.directoryUri,
+      PHOTO_EXPORT_FOLDER_NAME,
+    ));
+
+  await AsyncStorage.setItem(PHOTO_EXPORT_DIRECTORY_KEY, exportDirectory);
+  return exportDirectory;
+};
 
 export const searchNumberingAccounts = async (filters: {
   wardNo?: string | null;
@@ -13,36 +44,36 @@ export const searchNumberingAccounts = async (filters: {
   const db = await getDB();
   return db.getAllAsync<NumberingAccount>(
     `SELECT
-      acid as id,
-      COALESCE(owner_name, '') as owner_name,
-      COALESCE(holder_name, '') as holder_name,
-      COALESCE(buildingname, '') as building_name,
-      COALESCE(buildingno, '') as building_no,
-      COALESCE(address, '') as address,
-      COALESCE(hasgharkul, 0) as has_gharkul,
+      ACID as id,
+      COALESCE(Owner_Name, '') as owner_name,
+      COALESCE(Holder_Name, '') as holder_name,
+      COALESCE(BuildingName, '') as building_name,
+      COALESCE(BuildingNo, '') as building_no,
+      COALESCE(Address, '') as address,
+      COALESCE(HasGharkul, 0) as has_gharkul,
       COALESCE(numberingdone, 0) as numbering_done,
       COALESCE(numberingremarks, '') as numbering_remarks,
-      COALESCE(photopath, '') as photo_path,
-      COALESCE(o_onlineno, '') as o_online_no,
-      o_zid as o_zid,
-      o_wardno as o_ward_no,
-      COALESCE(CAST(o_propertyno as TEXT), '') as o_property_no,
-      COALESCE(CAST(o_partno as TEXT), '') as o_part_no,
-      COALESCE(o_citysurveyno, '') as o_city_survey_no,
-      COALESCE(o_plotno, '') as o_plot_no,
-      opa as opa,
-      o_totaltax as o_total_tax,
-      zid as zid,
-      wardno as ward_no,
-      propertyno as property_no,
-      partno as part_no,
-      COALESCE(citysurveyno, '') as city_survey_no,
-      COALESCE(plotno, '') as plot_no
-    FROM accounts
-    WHERE (? = '' OR CAST(wardno as TEXT) = ?)
-      AND (? = '' OR CAST(propertyno as TEXT) = ?)
-      AND (? = '' OR owner_name = ?)
-    ORDER BY wardno, propertyno`,
+      COALESCE(PhotoPath, '') as photo_path,
+      COALESCE(O_OnlineNo, '') as o_online_no,
+      O_ZID as o_zid,
+      O_WardNo as o_ward_no,
+      COALESCE(CAST(O_PropertyNo as TEXT), '') as o_property_no,
+      COALESCE(CAST(O_PartNo as TEXT), '') as o_part_no,
+      COALESCE(O_CitySurveyNo, '') as o_city_survey_no,
+      COALESCE(O_PlotNo, '') as o_plot_no,
+      OPA as opa,
+      O_TotalTax as o_total_tax,
+      ZID as zid,
+      WardNo as ward_no,
+      PropertyNo as property_no,
+      PartNo as part_no,
+      COALESCE(CitySurveyNo, '') as city_survey_no,
+      COALESCE(PlotNo, '') as plot_no
+    FROM Accounts
+    WHERE (? = '' OR CAST(WardNo as TEXT) = ?)
+      AND (? = '' OR CAST(PropertyNo as TEXT) = ?)
+      AND (? = '' OR Owner_Name = ?)
+    ORDER BY WardNo, PropertyNo`,
     [
       filters.wardNo ?? "",
       filters.wardNo ?? "",
@@ -59,33 +90,33 @@ export const getNumberingAccountById = async (id: number) => {
   const db = await getDB();
   return db.getFirstAsync<NumberingAccount>(
     `SELECT
-      acid as id,
-      COALESCE(owner_name, '') as owner_name,
-      COALESCE(holder_name, '') as holder_name,
-      COALESCE(buildingname, '') as building_name,
-      COALESCE(buildingno, '') as building_no,
-      COALESCE(address, '') as address,
-      COALESCE(mobileno, '') as mobile_no,
-      COALESCE(hasgharkul, 0) as has_gharkul,
+      ACID as id,
+      COALESCE(Owner_Name, '') as owner_name,
+      COALESCE(Holder_Name, '') as holder_name,
+      COALESCE(BuildingName, '') as building_name,
+      COALESCE(BuildingNo, '') as building_no,
+      COALESCE(Address, '') as address,
+      COALESCE(MobileNo, '') as mobile_no,
+      COALESCE(HasGharkul, 0) as has_gharkul,
       COALESCE(numberingdone, 0) as numbering_done,
       COALESCE(numberingremarks, '') as numbering_remarks,
-      COALESCE(photopath, '') as photo_path,
-      COALESCE(o_onlineno, '') as o_online_no,
-      o_zid as o_zid,
-      o_wardno as o_ward_no,
-      COALESCE(CAST(o_propertyno as TEXT), '') as o_property_no,
-      COALESCE(CAST(o_partno as TEXT), '') as o_part_no,
-      COALESCE(o_citysurveyno, '') as o_city_survey_no,
-      COALESCE(o_plotno, '') as o_plot_no,
-      opa as opa,
-      o_totaltax as o_total_tax,
-      zid as zid,
-      wardno as ward_no,
-      propertyno as property_no,
-      partno as part_no,
-      COALESCE(citysurveyno, '') as city_survey_no,
-      COALESCE(plotno, '') as plot_no
-    FROM accounts WHERE acid = ?`,
+      COALESCE(PhotoPath, '') as photo_path,
+      COALESCE(O_OnlineNo, '') as o_online_no,
+      O_ZID as o_zid,
+      O_WardNo as o_ward_no,
+      COALESCE(CAST(O_PropertyNo as TEXT), '') as o_property_no,
+      COALESCE(CAST(O_PartNo as TEXT), '') as o_part_no,
+      COALESCE(O_CitySurveyNo, '') as o_city_survey_no,
+      COALESCE(O_PlotNo, '') as o_plot_no,
+      OPA as opa,
+      O_TotalTax as o_total_tax,
+      ZID as zid,
+      WardNo as ward_no,
+      PropertyNo as property_no,
+      PartNo as part_no,
+      COALESCE(CitySurveyNo, '') as city_survey_no,
+      COALESCE(PlotNo, '') as plot_no
+    FROM Accounts WHERE ACID = ?`,
     [id],
   );
 };
@@ -100,13 +131,13 @@ export const getAccountsPhotos = async (accountId: number) => {
     ImagePath: string;
   }>(
     `SELECT
-      imageid AS ImageId,
-      acid AS ACID,
-      filename AS FileName,
-      mimetype AS MimeType,
-      imagepath AS ImagePath
-     FROM accountsphotos
-     WHERE acid = ?`,
+      ImageId AS ImageId,
+      ACID AS ACID,
+      FileName AS FileName,
+      MimeType AS MimeType,
+      ImagePath AS ImagePath
+         FROM AccountsPhotos
+         WHERE ACID = ?`,
     [accountId],
   );
   return result;
@@ -114,7 +145,7 @@ export const getAccountsPhotos = async (accountId: number) => {
 export const getAccountPhotoCount = async (accountId: number) => {
   const db = await getDB();
   const result = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM accountsphotos WHERE acid = ?",
+    "SELECT COUNT(*) as total FROM AccountsPhotos WHERE ACID = ?",
     [accountId],
   );
   return result?.total ?? 0;
@@ -138,19 +169,19 @@ export const saveNumbering = async (payload: {
 }) => {
   const db = await getDB();
   await db.runAsync(
-    `UPDATE accounts SET
-      wardno = ?,
-      propertyno = ?,
-      partno = ?,
-      address = ?,
-      buildingname = ?,
-      buildingno = ?,
-      hasgharkul = ?,
+    `UPDATE Accounts SET
+      WardNo = ?,
+      PropertyNo = ?,
+      PartNo = ?,
+      Address = ?,
+      BuildingName = ?,
+      BuildingNo = ?,
+      HasGharkul = ?,
       numberingremarks = ?,
       numberingdone = 1,
       updated_at = ?,
       sync_version = COALESCE(sync_version, 0) + 1
-     WHERE acid = ?`,
+    WHERE ACID = ?`,
     [
       payload.wardNo || null,
       payload.propertyNo || null,
@@ -165,11 +196,25 @@ export const saveNumbering = async (payload: {
     ],
   );
 
+  let exportedPhotos = 0;
+  let failedExports = 0;
   for (const photo of payload.photos) {
     const imagePath = await savePhotoToDeviceStorage(payload.propertyId, photo);
+    let exportedPhoto = false;
+    let exportFailed = false;
+    try {
+      const exportDirectory = await getNumberingPhotoExportDirectory();
+      exportFailed = !!exportDirectory;
+      exportedPhoto = await exportPhotoToSelectedDirectory(
+        payload.propertyId,
+        photo,
+      );
+    } catch {
+      exportFailed = true;
+    }
     await db.runAsync(
-      `INSERT INTO accountsphotos
-       (acid, filename, mimetype, imagepath, created_at, updated_at, sync_version)
+      `INSERT INTO AccountsPhotos
+       (ACID, FileName, MimeType, ImagePath, created_at, updated_at, sync_version)
        VALUES (?, ?, ?, ?, ?, ?, 1)`,
       [
         payload.propertyId,
@@ -180,7 +225,11 @@ export const saveNumbering = async (payload: {
         nowIso(),
       ],
     );
+    if (exportedPhoto) exportedPhotos += 1;
+    else if (exportFailed) failedExports += 1;
   }
+
+  return { exportedPhotos, failedExports };
 };
 
 const savePhotoToDeviceStorage = async (
@@ -203,10 +252,42 @@ const savePhotoToDeviceStorage = async (
   return destination;
 };
 
+const exportPhotoToSelectedDirectory = async (
+  accountId: number,
+  photo: { uri: string; fileName: string; mimeType: string },
+) => {
+  const directoryUri = await getNumberingPhotoExportDirectory();
+  if (!directoryUri) return false;
+
+  const safeFileName = photo.fileName.replace(/[^\w.-]/g, "_");
+  const extensionIndex = safeFileName.lastIndexOf(".");
+  const extension =
+    extensionIndex > 0 ? safeFileName.slice(extensionIndex) : "";
+  const baseName =
+    extensionIndex > 0 ? safeFileName.slice(0, extensionIndex) : safeFileName;
+  const exportFileName = `${accountId}_${Date.now()}_${baseName}${extension}`;
+  const targetUri = await FileSystem.StorageAccessFramework.createFileAsync(
+    directoryUri,
+    extension ? exportFileName.slice(0, -extension.length) : exportFileName,
+    photo.mimeType,
+  );
+  const contents = await FileSystem.readAsStringAsync(photo.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  await FileSystem.StorageAccessFramework.writeAsStringAsync(
+    targetUri,
+    contents,
+    {
+      encoding: FileSystem.EncodingType.Base64,
+    },
+  );
+  return true;
+};
+
 export const getWardNumbers = async (): Promise<string[]> => {
   const db = await getDB();
   const wards = await db.getAllAsync<{ ward_no: string }>(
-    `SELECT DISTINCT CAST(wardno as TEXT) as ward_no FROM accounts WHERE wardno IS NOT NULL AND wardno != '' ORDER BY wardno`,
+    `SELECT DISTINCT CAST(WardNo as TEXT) as ward_no FROM Accounts WHERE WardNo IS NOT NULL AND WardNo != '' ORDER BY WardNo`,
   );
   return wards.map((w) => w.ward_no);
 };
@@ -214,7 +295,7 @@ export const getWardNumbers = async (): Promise<string[]> => {
 export const getPropertyNumbers = async (wardNo: string): Promise<string[]> => {
   const db = await getDB();
   const properties = await db.getAllAsync<{ property_no: string }>(
-    `SELECT DISTINCT CAST(propertyno as TEXT) as property_no FROM accounts WHERE propertyno IS NOT NULL AND propertyno != '' AND CAST(wardno as TEXT) = ? ORDER BY propertyno`,
+    `SELECT DISTINCT CAST(PropertyNo as TEXT) as property_no FROM Accounts WHERE PropertyNo IS NOT NULL AND PropertyNo != '' AND CAST(WardNo as TEXT) = ? ORDER BY PropertyNo`,
     [wardNo],
   );
   return properties.map((p) => p.property_no);
@@ -226,13 +307,13 @@ export const getOwnerNames = async (filters?: {
 }): Promise<string[]> => {
   const db = await getDB();
   const owners = await db.getAllAsync<{ owner_name: string }>(
-    `SELECT DISTINCT owner_name as owner_name
-     FROM accounts
-     WHERE owner_name IS NOT NULL
-       AND owner_name != ''
-       AND (? = '' OR CAST(wardno as TEXT) = ?)
-       AND (? = '' OR CAST(propertyno as TEXT) = ?)
-     ORDER BY owner_name`,
+    `SELECT DISTINCT Owner_Name as owner_name
+     FROM Accounts
+     WHERE Owner_Name IS NOT NULL
+       AND Owner_Name != ''
+       AND (? = '' OR CAST(WardNo as TEXT) = ?)
+       AND (? = '' OR CAST(PropertyNo as TEXT) = ?)
+     ORDER BY Owner_Name`,
     [
       filters?.wardNo ?? "",
       filters?.wardNo ?? "",
@@ -246,7 +327,7 @@ export const getOwnerNames = async (filters?: {
 export const getHolderNames = async (): Promise<string[]> => {
   const db = await getDB();
   const holders = await db.getAllAsync<{ holder_name: string }>(
-    `SELECT DISTINCT holder_name as holder_name FROM accounts WHERE holder_name IS NOT NULL AND holder_name != '' ORDER BY holder_name`,
+    `SELECT DISTINCT Holder_Name as holder_name FROM Accounts WHERE Holder_Name IS NOT NULL AND Holder_Name != '' ORDER BY Holder_Name`,
   );
   return holders.map((h) => h.holder_name);
 };

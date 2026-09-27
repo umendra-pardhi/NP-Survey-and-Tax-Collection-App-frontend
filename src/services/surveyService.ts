@@ -11,7 +11,7 @@ export const saveSurvey = async (payload: {
 }) => {
   const db = await getDB();
   await db.runAsync(
-    "UPDATE accounts SET mobileno = ?, tenantname = ?, surveydone = ?, remark1 = ?, updated_at = ?, sync_version = COALESCE(sync_version, 0) + 1 WHERE acid = ?",
+    "UPDATE Accounts SET MobileNo = ?, TenantName = ?, surveydone = ?, Remark1 = ?, updated_at = ?, sync_version = COALESCE(sync_version, 0) + 1 WHERE ACID = ?",
     [
       payload.mobile,
       payload.tenantInfo,
@@ -24,7 +24,7 @@ export const saveSurvey = async (payload: {
 
   if (payload.isDraft === 0) {
     await db.runAsync(
-      "UPDATE accounts SET surveydone = 1, updated_at = ?, sync_version = COALESCE(sync_version, 0) + 1 WHERE acid = ?",
+      "UPDATE Accounts SET surveydone = 1, updated_at = ?, sync_version = COALESCE(sync_version, 0) + 1 WHERE ACID = ?",
       [nowIso(), payload.propertyId],
     );
   }
@@ -38,7 +38,7 @@ export const addSurveyMember = async (payload: {
 }) => {
   const db = await getDB();
   await db.runAsync(
-    "INSERT INTO assessment (acid, propertydescription, floor, con_year, prop_use, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 1)",
+    "INSERT INTO Assessment (ACID, PropertyDescription, Floor, con_year, prop_use, updated_at, sync_version) VALUES (?, ?, ?, ?, ?, ?, 1)",
     [
       payload.propertyId,
       payload.name,
